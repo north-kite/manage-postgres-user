@@ -1,0 +1,5 @@
+{
+  "postgres_user_username": "my-username",
+  "postgres_user_password_parameter_name": "my-ssm-path",
+  "privileges": "my-priviledges"
+}
