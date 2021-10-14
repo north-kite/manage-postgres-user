@@ -35,7 +35,15 @@ def generate_password():
         str: generated password
     """
     valid_chars = string.ascii_letters + string.digits + string.punctuation
-    invalid_chars = ["/", "@", '"', "\\", "'", "_", "$"]  # Not allowed in a PostgreSQL password
+    invalid_chars = [
+        "/",
+        "@",
+        '"',
+        "\\",
+        "'",
+        "_",
+        "$",
+    ]  # Not allowed in a PostgreSQL password
     pw_chars = "".join([i for i in valid_chars if i not in invalid_chars])
     pw = "".join((random.choice(pw_chars)) for x in range(40))
     logger.debug("Password generated")
@@ -151,8 +159,8 @@ def get_connection(username, password):
         password=password,
         port=5432,
         database=os.environ["RDS_DATABASE_NAME"],
-        sslmode = 'require',
-        sslrootcert = 'rds-ca-2019-2015-root.pem'
+        sslmode="require",
+        sslrootcert="rds-ca-2019-2015-root.pem",
     )
 
 
@@ -277,7 +285,9 @@ def test_connection(username, password_source, password_source_type):
     Returns:
          Boolean: True if login successful, False otherwise
     """
-    postgres_user_password = get_postgres_password(password_source, password_source_type)
+    postgres_user_password = get_postgres_password(
+        password_source, password_source_type
+    )
     try:
         connection = psycopg2.connect(
             host=os.environ["RDS_ENDPOINT"],
@@ -285,8 +295,8 @@ def test_connection(username, password_source, password_source_type):
             password=postgres_user_password,
             port=5432,
             database=os.environ["RDS_DATABASE_NAME"],
-            sslmode = 'require',
-            sslrootcert = 'rds-ca-2019-2015-root.pem'
+            sslmode="require",
+            sslrootcert="rds-ca-2019-2015-root.pem",
         )
     except Exception as e:
         logger.error(e)
@@ -310,8 +320,7 @@ def validate_event(event):
     valid_privileges = [
         "ALL",
         "CREATE",
-        "CONNECT"
-        "DELETE",
+        "CONNECT" "DELETE",
         "EXECUTE",
         "INSERT",
         "REFERENCES",
@@ -428,7 +437,9 @@ def handler(event, context):
         postgres_master_password_source = os.environ["RDS_MASTER_PASSWORD_SECRET_NAME"]
         postgres_master_password_source_type = "secretsmanager"
     else:
-        postgres_master_password_source = os.environ["RDS_MASTER_PASSWORD_PARAMETER_NAME"]
+        postgres_master_password_source = os.environ[
+            "RDS_MASTER_PASSWORD_PARAMETER_NAME"
+        ]
         postgres_master_password_source_type = "ssm"
 
     postgres_user_username = event["postgres_user_username"]
@@ -506,8 +517,7 @@ def handler(event, context):
             # Grant those priviledges needed
             execute_statement(
                 "GRANT ALL ON DATABASE {} TO {};".format(
-                    database,
-                    postgres_user_username
+                    database, postgres_user_username
                 ),
                 postgres_master_username,
                 postgres_master_password_source,
@@ -534,7 +544,9 @@ def handler(event, context):
         )
 
     test_result = test_connection(
-        postgres_user_username, postgres_user_password_source, postgres_user_password_source_type
+        postgres_user_username,
+        postgres_user_password_source,
+        postgres_user_password_source_type,
     )
     if test_result:
         logger.info(
@@ -544,6 +556,7 @@ def handler(event, context):
         raise ValueError(
             f"Password rotation failed: PostgreSQL user {postgres_user_username} failed to login using password from source {postgres_user_password_source} in {postgres_user_password_source_type}"
         )
+
 
 if __name__ == "__main__":
     script_dir = os.path.dirname(__file__)
