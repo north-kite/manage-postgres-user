@@ -426,6 +426,11 @@ def handler(event, context):
     validate_event(event)
     validate_envvars()
 
+    if "postgres_database_name" in event.keys():
+        database = event["postgres_database_name"]
+    else:
+        database = os.environ["RDS_DATABASE_NAME"]
+
     if "postgres_user_password_secret_name" in event.keys():
         postgres_user_password_source = event["postgres_user_password_secret_name"]
         postgres_user_password_source_type = "secretsmanager"
@@ -444,7 +449,6 @@ def handler(event, context):
 
     postgres_user_username = event["postgres_user_username"]
     postgres_master_username = os.environ["RDS_MASTER_USERNAME"]
-    database = os.environ["RDS_DATABASE_NAME"]
 
     logger.info(f"Updating {postgres_user_username}")
     pw = generate_password()
