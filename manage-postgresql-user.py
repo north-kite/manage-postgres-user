@@ -50,10 +50,12 @@ def generate_password():
     return pw
 
 
-def update_password_source(username, password, password_source, password_source_type):
+def update_password_source(database, username, password, password_source, password_source_type):
     """Update password stored in AWS SSM or Secrets Manager
 
     Args:
+        database (str): database name
+
         username (str): username
 
         password (str): password
@@ -87,7 +89,7 @@ def update_password_source(username, password, password_source, password_source_
         try:
             # Engine and port are hard-coded as these parameters can only be used with Aurora Serverless
             secret_value = {
-                "dbInstanceIdentifier": os.environ["RDS_DATABASE_NAME"],
+                "dbInstanceIdentifier": database,
                 "engine": "aurora-postgresql",
                 "host": os.environ["RDS_ENDPOINT"],
                 "port": 5432,
@@ -142,10 +144,12 @@ def get_postgres_password(password_source, password_source_type):
         raise Exception(f"Unknown password source type: {password_source_type}")
 
 
-def get_connection(username, password):
+def get_connection(database, username, password):
     """Return PostgreSQL connection
 
     Args:
+        database (str): PostgreSQL database name
+
         username (str): PostgreSQL username
 
         password (str): PostgreSQL password
@@ -158,17 +162,19 @@ def get_connection(username, password):
         user=username,
         password=password,
         port=5432,
-        database=os.environ["RDS_DATABASE_NAME"],
+        database=database,
         sslmode="require",
         sslrootcert="rds-ca-2019-2015-root.pem",
     )
 
 
-def execute_statement(sql, username, password_source, password_source_type):
+def execute_statement(sql, database, username, password_source, password_source_type):
     """Execute PostgreSQL statement that does not return data
 
     Args:
         sql (str): PostgreSQL statement
+
+        database (str): PostgreSQL database name
 
         username (str): PostgreSQL username
 
@@ -185,7 +191,7 @@ def execute_statement(sql, username, password_source, password_source_type):
         None
     """
     connection = get_connection(
-        username, get_postgres_password(password_source, password_source_type)
+        database, username, get_postgres_password(password_source, password_source_type)
     )
     logger = logging.getLogger()
     cursor = connection.cursor()
@@ -195,11 +201,13 @@ def execute_statement(sql, username, password_source, password_source_type):
     connection.close()
 
 
-def execute_query(sql, username, password_source, password_source_type):
+def execute_query(sql, database, username, password_source, password_source_type):
     """Execute PostgreSQL statement that returns data
 
     Args:
         sql (str): PostgreSQL statement
+
+        database (str): PostgreSQL database name
 
         username (str): PostgreSQL username used to login into server
 
@@ -216,7 +224,7 @@ def execute_query(sql, username, password_source, password_source_type):
          PostgreSQL rows as a list of tuples.
     """
     connection = get_connection(
-        username, get_postgres_password(password_source, password_source_type)
+        database, username, get_postgres_password(password_source, password_source_type)
     )
     logger = logging.getLogger()
     cursor = connection.cursor()
@@ -227,10 +235,12 @@ def execute_query(sql, username, password_source, password_source_type):
     return result
 
 
-def check_user_exists(master_username, username, password_source, password_source_type):
+def check_user_exists(database, master_username, username, password_source, password_source_type):
     """Check if a user <username> exists in PostgreSQL server
 
     Args:
+        database (str): PostgreSQL database name.
+
         master_username (str): PostgreSQL master username. This is used to login.
 
         username (str): PostgreSQL username existence of which is to be checked.
@@ -250,6 +260,7 @@ def check_user_exists(master_username, username, password_source, password_sourc
 
     result = execute_query(
         "SELECT rolname FROM pg_roles WHERE rolname = '{}';".format(username),
+        database,
         master_username,
         password_source,
         password_source_type,
@@ -267,10 +278,12 @@ def check_user_exists(master_username, username, password_source, password_sourc
         return False
 
 
-def test_connection(username, password_source, password_source_type):
+def test_connection(database, username, password_source, password_source_type):
     """Check if a user <username> can login into PostgreSQL server
 
     Args:
+        database (str): PostgreSQL database name
+
         username (str): PostgreSQL username
 
         password_source (str): name of entity storing the password for the
@@ -294,7 +307,7 @@ def test_connection(username, password_source, password_source_type):
             user=username,
             password=postgres_user_password,
             port=5432,
-            database=os.environ["RDS_DATABASE_NAME"],
+            database=database,
             sslmode="require",
             sslrootcert="rds-ca-2019-2015-root.pem",
         )
@@ -427,9 +440,9 @@ def handler(event, context):
     validate_envvars()
 
     if "postgres_database_name" in event.keys():
-        database = event["postgres_database_name"]
+        postgres_database_name = event["postgres_database_name"]
     else:
-        database = os.environ["RDS_DATABASE_NAME"]
+        postgres_database_name = os.environ["RDS_DATABASE_NAME"]
 
     if "postgres_user_password_secret_name" in event.keys():
         postgres_user_password_source = event["postgres_user_password_secret_name"]
@@ -453,12 +466,14 @@ def handler(event, context):
     logger.info(f"Updating {postgres_user_username}")
     pw = generate_password()
     update_password_source(
+        postgres_database_name,
         postgres_user_username,
         pw,
         postgres_user_password_source,
         postgres_user_password_source_type,
     )
     user_exists = check_user_exists(
+        postgres_database_name,
         postgres_master_username,
         postgres_user_username,
         postgres_master_password_source,
@@ -491,12 +506,14 @@ def handler(event, context):
         """.format(
             postgres_user_username, postgres_user_username, pw
         ),
+        postgres_database_name,
         postgres_master_username,
         postgres_master_password_source,
         postgres_master_password_source_type,
     )
     execute_statement(
         "ALTER USER {} WITH PASSWORD '{}';".format(postgres_user_username, pw),
+        postgres_database_name,
         postgres_master_username,
         postgres_master_password_source,
         postgres_master_password_source_type,
@@ -511,9 +528,10 @@ def handler(event, context):
             # Revoke all privilegest first
             execute_statement(
                 "REVOKE ALL ON DATABASE {} FROM {};".format(
-                    database,
+                    postgres_database_name,
                     postgres_user_username,
                 ),
+                postgres_database_name,
                 postgres_master_username,
                 postgres_master_password_source,
                 postgres_master_password_source_type,
@@ -521,8 +539,9 @@ def handler(event, context):
             # Grant those priviledges needed
             execute_statement(
                 "GRANT ALL ON DATABASE {} TO {};".format(
-                    database, postgres_user_username
+                    postgres_database_name, postgres_user_username
                 ),
+                postgres_database_name,
                 postgres_master_username,
                 postgres_master_password_source,
                 postgres_master_password_source_type,
@@ -538,6 +557,7 @@ def handler(event, context):
                     "GRANT {} ON {} TO {};".format(
                         privilege, table, postgres_user_username
                     ),
+                    postgres_database_name,
                     postgres_master_username,
                     postgres_master_password_source,
                     postgres_master_password_source_type,
@@ -548,6 +568,7 @@ def handler(event, context):
         )
 
     test_result = test_connection(
+        postgres_database_name,
         postgres_user_username,
         postgres_user_password_source,
         postgres_user_password_source_type,
