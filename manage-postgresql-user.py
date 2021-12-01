@@ -518,21 +518,21 @@ def handler(event, context):
                 postgres_master_password_source,
                 postgres_master_password_source_type,
             )
-            # Alter default privileges needed
-            execute_statement(
-                "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO {};".format(
-                    postgres_user_username
-                ),
-                postgres_master_username,
-                postgres_master_password_source,
-                postgres_master_password_source_type,
-            )
             for privilege_table in event["privileges"].split(", "):
                 privilege = privilege_table.split(":")[0]
                 table = (
                     "TABLE " + privilege_table.split(":")[1]
                     if len(privilege_table.split(":")) == 2
                     else "ALL TABLES IN SCHEMA public"
+                )
+                # Alter default privileges needed
+                execute_statement(
+                    "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT {} ON {} TO {};".format(
+                        privilege, table, postgres_user_username
+                     ),
+                     postgres_master_username,
+                     postgres_master_password_source,
+                     postgres_master_password_source_type,
                 )
                 execute_statement(
                     "GRANT {} ON {} TO {};".format(
