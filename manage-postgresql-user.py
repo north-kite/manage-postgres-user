@@ -518,10 +518,10 @@ def handler(event, context):
                 postgres_master_password_source,
                 postgres_master_password_source_type,
             )
-            # Grant those priviledges needed
+            # Alter default privileges needed
             execute_statement(
-                "GRANT ALL ON DATABASE {} TO {};".format(
-                    database, postgres_user_username
+                "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO {};".format(
+                    postgres_user_username
                 ),
                 postgres_master_username,
                 postgres_master_password_source,
