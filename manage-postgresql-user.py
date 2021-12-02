@@ -50,7 +50,9 @@ def generate_password():
     return pw
 
 
-def update_password_source(database, username, password, password_source, password_source_type):
+def update_password_source(
+    database, username, password, password_source, password_source_type
+):
     """Update password stored in AWS SSM or Secrets Manager
 
     Args:
@@ -235,7 +237,9 @@ def execute_query(sql, database, username, password_source, password_source_type
     return result
 
 
-def check_user_exists(database, master_username, username, password_source, password_source_type):
+def check_user_exists(
+    database, master_username, username, password_source, password_source_type
+):
     """Check if a user <username> exists in PostgreSQL server
 
     Args:
